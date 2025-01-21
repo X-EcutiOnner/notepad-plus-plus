@@ -1,35 +1,59 @@
-Notepad++ v8.5.8 bug-fixes and new features:
+Notepad++ v8.7.5 regression-fixes, bug-fixes & enhancements:
 
- 1. Fix "Clear Read-Only Flag" command not working immediately regression.
- 2. Fix saving files losing Alternate Data Stream issue.
- 3. Fix data loss issue due to no room on disk for saving.
- 4. Add Win10/Win11 Restart-application feature.
- 5. Fix user created session being modified behaviour on exit.
- 6. Improve document list display performance.
- 7. Update Scintilla to v5.3.7 & Lexilla to v5.2.7.
- 8. Fix unwanted Afrikaans installer language issue.
- 9. Fix a crash issue while reading settings from cloud. 
-10. Fix  security issue CVE-2022-31901.
-11. Enhance non-saved search text's persistence in Find dialog combobox while pressing arrow key.
-12. Make auto-checking of Find InSelection configurable (resizable & can be disabled).
-13. Perl enhancement: Update Stylers & the keywords for Perl v5.38.    
-14. Fix "Single Line Uncomment" uncommenting an extra line issue.
-15. Fix "Next Bookmark" command not resetting current column issue.
-16. Allow menu command Window->Windows to be assigned a shortcut. 
-17. Fix wrong categories in Shortcuts Mapper.
+ 1. Fix nfo file losing modification issue (regression from v8.7.4).
+ 2. Fix network file wrong modification detection (regression from v8.7.1).
+ 3. Fix regression "Open Selected PathName(s)" command not working while all selected.
+ 4. Fix unusuability after deleting files in split view.
+ 5. Fix unsaved documents lost on next launch if portable Notepad++ change path.    
+ 6. Refactoring for the better performance & smaller binary size.
+ 7. Improve "Copy Selected Lines" command.
+ 8. Add Visual Basic function list.
+ 9. Add Swift, TypeScript, and Go for advanced Auto-indent.
+10. Fix UDL comment line not working due to conflict with stream comment definition.
+11. Enhance "Follow current doc." GUI action/option in Find in files.
+12. Fix Reload Workspace not working.
+13. Add "Show details" functionality in installer.
+
+
+Notepad++ v8.7.4 regression-fix & bug-fixes:
+
+1. Fix regression of multi-line tabbar height not updated after closing tabs.
+2. Fix the extension defined by user not override language default extensions.
+3. Fix encoding of nfo file cannot be changed bug.
+
+
+Notepad++ v8.7.3 bug-fixes & new features :
+
+1. Fix a crash while disabling "Pin tab" feature.
+2. Fix drag&drop a folder in Notepad++ launch redundant dialog regression.
+3. Fix docked panels invisibility in multi-instance mode.
+4. Add "Pin/Unpin Tab" context menu item.
+5. Add "Close All BUT Pinned" command.
+6. Fix a possible buffer overflow issue.
+
+
+Notepad++ v8.7.2 new features & bug-fixes:
+
+1. Add Pin tab feature.
+2. Tabbar enhancement: Hide inactive tab Close & Pin buttons.  
+3. Tabbar enhancement: Highlight inactive darken tab on mouse hover.
+4. Fix Ctrl-C not doing copy from Search result issue.
+5. Add "Minimize / Close to" option for System tray.
+6. Add ability to open/copy selected files from Search-results.
+7. Fix replace field focus losing when Notepad++ is switched back.
 
 
 Get more info on
-https://notepad-plus-plus.org/downloads/v8.5.8/
+https://notepad-plus-plus.org/downloads/v8.7.5/
 
 
 Included plugins:
 
 1.  NppExport v0.4
-2.  Converter v4.5
-3.  Mime Tool v2.9
+2.  Converter v4.6
+3.  Mime Tool v3.1
 
 
 Updater (Installer only):
 
-* WinGup (for Notepad++) v5.2.6
+* WinGUp (for Notepad++) v5.3.1

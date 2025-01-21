@@ -119,6 +119,19 @@ KeyIDNAME namedKeyArray[] = {
 {"F11", VK_F11},
 {"F12", VK_F12},
 
+{"F13", VK_F13},
+{"F14", VK_F14},
+{"F15", VK_F15},
+{"F16", VK_F16},
+{"F17", VK_F17},
+{"F18", VK_F18},
+{"F19", VK_F19},
+{"F20", VK_F20},
+{"F21", VK_F21},
+{"F22", VK_F22},
+{"F23", VK_F23},
+{"F24", VK_F24},
+
 {"~", VK_OEM_3},
 {"-", VK_OEM_MINUS},
 {"=", VK_OEM_PLUS},
@@ -135,6 +148,60 @@ KeyIDNAME namedKeyArray[] = {
 };
 
 #define nbKeys sizeof(namedKeyArray)/sizeof(KeyIDNAME)
+
+#define MAX_MAPSTR_CHARS 16
+map<UCHAR, char[MAX_MAPSTR_CHARS+1]> oemVirtualKeyMap;
+std::vector<UCHAR> oemVkUsedIDs;
+void mapOemVirtualKeys()
+{
+	const LANGID EN_US = 0x0409;
+	
+	// this function should only be called once, so update the flag
+	static bool isMapped = false;
+	if (isMapped) return;
+	
+	// determine the active keyboard "language"
+	LANGID current_lang_id = LOWORD(GetKeyboardLayout(0));
+	
+	// for each of the namedKeyArray, check if it's VK_OEM_*, and update the map of VK_OEM names as needed
+	for (size_t i = 0 ; i < nbKeys ; ++i)
+	{
+		// only need to map the VK_OEM_* keys, which are all at or above 0xA0
+		if (namedKeyArray[i].id >= 0xA0) 
+		{
+			// now update the STR in the mapping
+			UINT v2c = MapVirtualKeyW((UINT)namedKeyArray[i].id, MAPVK_VK_TO_CHAR);
+			
+			// if it's a "dead key" (pre-accent modifier) or "ligature key", it will be marked with high order bits; mask those out...
+			v2c = v2c & 0x1FFFFF;	// highest unicode is U+1F_FFFF, so that's the highest valid codepoint
+			
+			// if it's a normal character, just put it in the map; if the codepoint is higher than 0x7F, need to convert from codepoint to MultiByte UTF8-encoded text
+			if (v2c < 0x80)
+			{
+				sprintf_s(oemVirtualKeyMap[namedKeyArray[i].id], MAX_MAPSTR_CHARS, "%c", v2c);
+			}
+			else 
+			{
+				// convert from codepoint to MultiByte UTF8-encoded text
+				wchar_t v2w[2] = { (wchar_t)v2c, 0x00 };
+				char bytes[8] = {0};
+				int len = WideCharToMultiByte(CP_UTF8, 0, &v2w[0], -1, NULL, 0, NULL, NULL);
+				if (len > 0)
+				{
+					WideCharToMultiByte(CP_UTF8, 0, &v2w[0], -1, &bytes[0], len, NULL, NULL);
+				}
+				sprintf_s(oemVirtualKeyMap[namedKeyArray[i].id], MAX_MAPSTR_CHARS, "%s", bytes);
+			}
+
+			// en-US only: change from ` to ~, because that's what's historically been shown
+			if (current_lang_id==EN_US && oemVirtualKeyMap[namedKeyArray[i].id][0]=='`')
+			{
+				oemVirtualKeyMap[namedKeyArray[i].id][0] = '~';
+			}
+		}
+	}
+	isMapped = true;
+}
 
 string Shortcut::toString() const
 {
@@ -249,7 +316,7 @@ int ScintillaKeyMap::addKeyCombo(KeyCombo combo)
 
 	for (size_t i = 0; i < _size; ++i)
 	{	//if already in the list do not add it
-		KeyCombo & kc = _keyCombos[i];
+		const KeyCombo& kc = _keyCombos[i];
 		if (combo._key == kc._key && combo._isCtrl == kc._isCtrl && combo._isAlt == kc._isAlt && combo._isShift == kc._isShift)
 			return static_cast<int32_t>(i);	//already in the list
 	}
@@ -270,6 +337,7 @@ size_t ScintillaKeyMap::getSize() const
 
 void getKeyStrFromVal(UCHAR keyVal, string & str)
 {
+	mapOemVirtualKeys();
 	str = "";
 	bool found = false;
 	size_t i;
@@ -281,8 +349,17 @@ void getKeyStrFromVal(UCHAR keyVal, string & str)
 			break;
 		}
 	}
-	if (found)
+	if (found) 
+	{
+		// by default, assume it will just use the original name
 		str = namedKeyArray[i].name;
+		
+		// but if that key is mapped on this keyboard, then use the mapped name
+		if (oemVirtualKeyMap.find(namedKeyArray[i].id) != oemVirtualKeyMap.end())
+		{
+			str = oemVirtualKeyMap[namedKeyArray[i].id];
+		}
+	}
 	else 
 		str = "Unlisted";
 }
@@ -291,19 +368,19 @@ void getNameStrFromCmd(DWORD cmd, wstring & str)
 {
 	if ((cmd >= ID_MACRO) && (cmd < ID_MACRO_LIMIT))
 	{
-		vector<MacroShortcut> & theMacros = (NppParameters::getInstance()).getMacroList();
+		const vector<MacroShortcut> & theMacros = (NppParameters::getInstance()).getMacroList();
 		int i = cmd - ID_MACRO;
 		str = string2wstring(theMacros[i].getName(), CP_UTF8);
 	}
 	else if ((cmd >= ID_USER_CMD) && (cmd < ID_USER_CMD_LIMIT))
 	{
-		vector<UserCommand> & userCommands = (NppParameters::getInstance()).getUserCommandList();
+		const vector<UserCommand> & userCommands = (NppParameters::getInstance()).getUserCommandList();
 		int i = cmd - ID_USER_CMD;
 		str = string2wstring(userCommands[i].getName(), CP_UTF8);
 	}
 	else if ((cmd >= ID_PLUGINS_CMD) && (cmd < ID_PLUGINS_CMD_LIMIT))
 	{
-		vector<PluginCmdShortcut> & pluginCmds = (NppParameters::getInstance()).getPluginCommandList();
+		const vector<PluginCmdShortcut> & pluginCmds = (NppParameters::getInstance()).getPluginCommandList();
 		size_t i = 0;
 		for (size_t j = 0, len = pluginCmds.size(); j < len ; ++j)
 		{
@@ -318,7 +395,7 @@ void getNameStrFromCmd(DWORD cmd, wstring & str)
 	else
 	{
 		HWND hNotepad_plus = ::FindWindow(Notepad_plus_Window::getClassName(), NULL);
-		TCHAR cmdName[menuItemStrLenMax];
+		wchar_t cmdName[menuItemStrLenMax];
 		HMENU m = reinterpret_cast<HMENU>(::SendMessage(hNotepad_plus, NPPM_INTERNAL_GETMENU, 0, 0));
 		int nbChar = ::GetMenuString(m, cmd, cmdName, menuItemStrLenMax, MF_BYCOMMAND);
 		if (!nbChar)
@@ -370,9 +447,11 @@ intptr_t CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPar
 {
 	switch (Message)
 	{
-		case WM_INITDIALOG :
+		case WM_INITDIALOG:
 		{
 			NppDarkMode::autoSubclassAndThemeChildControls(_hSelf);
+
+			mapOemVirtualKeys();
 
 			::SetDlgItemText(_hSelf, IDC_NAME_EDIT, _canModifyName ? string2wstring(getMenuName(), CP_UTF8).c_str() : string2wstring(getName(), CP_UTF8).c_str());	//display the menu name, with ampersands, for macros
 			if (!_canModifyName)
@@ -383,13 +462,28 @@ intptr_t CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPar
 			::SendDlgItemMessage(_hSelf, IDC_ALT_CHECK, BM_SETCHECK, _keyCombo._isAlt?BST_CHECKED:BST_UNCHECKED, 0);
 			::SendDlgItemMessage(_hSelf, IDC_SHIFT_CHECK, BM_SETCHECK, _keyCombo._isShift?BST_CHECKED:BST_UNCHECKED, 0);
 			::EnableWindow(::GetDlgItem(_hSelf, IDOK), isValid() && (textlen > 0 || !_canModifyName));
+
+			// while buiding the IDC_KEY_COMBO keys, update the map to which VirtualKey is used for each index
 			int iFound = -1;
 			for (size_t i = 0 ; i < nbKeys ; ++i)
 			{
-				::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(string2wstring(namedKeyArray[i].name, CP_UTF8).c_str()));
+				const char* nameStr = namedKeyArray[i].name;
+				
+				// use the virtual key value, if it's been mapped
+				if (oemVirtualKeyMap.find(namedKeyArray[i].id) != oemVirtualKeyMap.end()) 
+				{
+					nameStr = oemVirtualKeyMap[namedKeyArray[i].id];
+				} 
+				
+				// only add a key to the IDC_KEY_COMBO list if the string is not empty
+				if (nameStr[0])
+				{
+					::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(string2wstring(nameStr, CP_UTF8).c_str()));
+					oemVkUsedIDs.push_back(namedKeyArray[i].id);
+				}
 
 				if (_keyCombo._key == namedKeyArray[i].id)
-					iFound = static_cast<int32_t>(i);
+					iFound = static_cast<int32_t>(oemVkUsedIDs.size());
 			}
 
 			if (iFound != -1)
@@ -401,26 +495,18 @@ intptr_t CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPar
 			updateConflictState();
 			NativeLangSpeaker* nativeLangSpeaker = NppParameters::getInstance().getNativeLangSpeaker();
 			nativeLangSpeaker->changeDlgLang(_hSelf, "ShortcutMapperSubDialg");
-			goToCenter();
+			goToCenter(SWP_SHOWWINDOW | SWP_NOSIZE);
 			return TRUE;
 		}
 
 		case WM_CTLCOLOREDIT:
 		{
-			if (NppDarkMode::isEnabled())
-			{
-				return NppDarkMode::onCtlColorSofter(reinterpret_cast<HDC>(wParam));
-			}
-			break;
+			return NppDarkMode::onCtlColorSofter(reinterpret_cast<HDC>(wParam));
 		}
 
 		case WM_CTLCOLORLISTBOX:
 		{
-			if (NppDarkMode::isEnabled())
-			{
-				return NppDarkMode::onCtlColor(reinterpret_cast<HDC>(wParam));
-			}
-			break;
+			return NppDarkMode::onCtlColor(reinterpret_cast<HDC>(wParam));
 		}
 
 		case WM_CTLCOLORDLG:
@@ -434,7 +520,6 @@ intptr_t CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPar
 					return NppDarkMode::onCtlColor(reinterpret_cast<HDC>(wParam));
 				}
 				return NppDarkMode::onCtlColorDarker(reinterpret_cast<HDC>(wParam));
-
 			}
 			break;
 		}
@@ -454,10 +539,18 @@ intptr_t CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPar
 			return TRUE;
 		}
 
-		case WM_COMMAND : 
+		case WM_DPICHANGED:
+		{
+			_dpiManager.setDpiWP(wParam);
+			setPositionDpi(lParam);
+
+			return TRUE;
+		}
+
+		case WM_COMMAND:
 		{
 			auto textlen = ::SendDlgItemMessage(_hSelf, IDC_NAME_EDIT, WM_GETTEXTLENGTH, 0, 0);
-			switch (wParam)
+			switch (LOWORD(wParam))
 			{
 				case IDC_CTRL_CHECK :
 					_keyCombo._isCtrl = BST_CHECKED == ::SendDlgItemMessage(_hSelf, static_cast<int32_t>(wParam), BM_GETCHECK, 0, 0);
@@ -484,7 +577,7 @@ intptr_t CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPar
 
 					if (_canModifyName)
 					{
-						TCHAR editName[menuItemStrLenMax]{};
+						wchar_t editName[menuItemStrLenMax]{};
 						::SendDlgItemMessage(_hSelf, IDC_NAME_EDIT, WM_GETTEXT, menuItemStrLenMax, reinterpret_cast<LPARAM>(editName));
 						setName(wstring2string(editName, CP_UTF8).c_str());
 					}
@@ -510,8 +603,8 @@ intptr_t CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPar
 					{
 						if (LOWORD(wParam) == IDC_KEY_COMBO)
 						{
-							auto i = ::SendDlgItemMessage(_hSelf, LOWORD(wParam), CB_GETCURSEL, 0, 0);
-							_keyCombo._key = namedKeyArray[i].id;
+							auto iSel = ::SendDlgItemMessage(_hSelf, LOWORD(wParam), CB_GETCURSEL, 0, 0);
+							_keyCombo._key = oemVkUsedIDs[iSel];
 							::EnableWindow(::GetDlgItem(_hSelf, IDOK), isValid() && (textlen > 0 || !_canModifyName));
 							::ShowWindow(::GetDlgItem(_hSelf, IDC_WARNING_STATIC), isEnabled()?SW_HIDE:SW_SHOW);
 							updateConflictState();
@@ -564,7 +657,8 @@ void Accelerator::updateShortcuts()
 				incrFindAcc.push_back(_pAccelArray[offset]);
 
 			if (shortcuts[i].getID() == IDM_SEARCH_FIND || shortcuts[i].getID() == IDM_SEARCH_REPLACE ||
-				shortcuts[i].getID() == IDM_SEARCH_FINDINFILES || shortcuts[i].getID() == IDM_SEARCH_MARK)
+				shortcuts[i].getID() == IDM_SEARCH_FINDINFILES || shortcuts[i].getID() == IDM_SEARCH_MARK ||
+				shortcuts[i].getID() == IDM_SEARCH_FINDNEXT || shortcuts[i].getID() == IDM_SEARCH_FINDPREV)
 				findReplaceAcc.push_back(_pAccelArray[offset]);
 
 			++offset;
@@ -615,7 +709,6 @@ void Accelerator::updateShortcuts()
 
 	if (_hIncFindAccTab)
 		::DestroyAcceleratorTable(_hIncFindAccTab);
-
 	size_t nb = incrFindAcc.size();
 	ACCEL *tmpIncrFindAccelArray = new ACCEL[nb];
 	for (i = 0; i < nb; ++i)
@@ -625,18 +718,33 @@ void Accelerator::updateShortcuts()
 	_hIncFindAccTab = ::CreateAcceleratorTable(tmpIncrFindAccelArray, static_cast<int32_t>(nb));
 	delete [] tmpIncrFindAccelArray;
 
-	if (_hIncFindAccTab)
-		::DestroyAcceleratorTable(_hIncFindAccTab);
+	if (_hAccTabSwitch)
+		::DestroyAcceleratorTable(_hAccTabSwitch);
 
+	ACCEL accNextTab{ BYTE{FVIRTKEY | FCONTROL}, VK_TAB, IDC_NEXT_TAB };
+	ACCEL accPrevTab{ BYTE{FVIRTKEY | FCONTROL | FSHIFT}, VK_TAB, IDC_PREV_TAB };
+	vector<ACCEL> tabSwitchAcc{ accNextTab, accPrevTab };
+	const size_t nbTabSwitchAcc = tabSwitchAcc.size();
+	if (nbTabSwitchAcc > 0)
+	{
+		ACCEL* tmpTabSwitchAcc = new ACCEL[nbTabSwitchAcc];
+		for (i = 0; i < nbTabSwitchAcc; ++i)
+			tmpTabSwitchAcc[i] = tabSwitchAcc.at(i);
+		_hAccTabSwitch = ::CreateAcceleratorTable(tmpTabSwitchAcc, static_cast<int>(nbTabSwitchAcc));
+		delete[] tmpTabSwitchAcc;
+	}
 
 	if (_hFindAccTab)
 		::DestroyAcceleratorTable(_hFindAccTab);
+
 	size_t nbFindReplaceAcc = findReplaceAcc.size();
 	if (nbFindReplaceAcc)
 	{
 		ACCEL* tmpFindAccelArray = new ACCEL[nbFindReplaceAcc];
-		for (size_t i = 0; i < nbFindReplaceAcc; ++i)
-			tmpFindAccelArray[i] = findReplaceAcc[i];
+
+		for (size_t j = 0; j < nbFindReplaceAcc; ++j)
+			tmpFindAccelArray[j] = findReplaceAcc[j];
+
 		_hFindAccTab = ::CreateAcceleratorTable(tmpFindAccelArray, static_cast<int>(nbFindReplaceAcc));
 		delete[] tmpFindAccelArray;
 	}
@@ -901,7 +1009,7 @@ void recordedMacroStep::PlayBack(Window* pNotepad, ScintillaEditView *pEditView)
 			|| (_message == SCI_INSERTTEXT) 
 			|| (_message == SCI_APPENDTEXT) )
 		{
-			SCNotification scnN;
+			SCNotification scnN{};
 			scnN.nmhdr.code = SCN_CHARADDED;
 			scnN.nmhdr.hwndFrom = pEditView->getHSelf();
 			scnN.nmhdr.idFrom = 0;
@@ -929,7 +1037,7 @@ void ScintillaAccelerator::init(vector<HWND> * vScintillas, HMENU hMenu, HWND me
 void ScintillaAccelerator::updateKeys() 
 {
 	NppParameters& nppParam = NppParameters::getInstance();
-	vector<ScintillaKeyMap> & map = nppParam.getScintillaKeyList();
+	const vector<ScintillaKeyMap> & map = nppParam.getScintillaKeyList();
 	size_t mapSize = map.size();
 	size_t index;
 	size_t nb = nbScintillas();
@@ -957,7 +1065,7 @@ void ScintillaAccelerator::updateKeys()
 
 void ScintillaAccelerator::updateMenuItemByID(const ScintillaKeyMap& skm, int id)
 {
-	TCHAR cmdName[menuItemStrLenMax];
+	wchar_t cmdName[menuItemStrLenMax];
 	::GetMenuString(_hAccelMenu, id, cmdName, menuItemStrLenMax, MF_BYCOMMAND);
 	int i = 0;
 	while (cmdName[i] != 0)
@@ -969,10 +1077,10 @@ void ScintillaAccelerator::updateMenuItemByID(const ScintillaKeyMap& skm, int id
 		}
 		++i;
 	}
-	generic_string menuItem = cmdName;
+	wstring menuItem = cmdName;
 	if (skm.isEnabled())
 	{
-		menuItem += TEXT("\t");
+		menuItem += L"\t";
 		menuItem += string2wstring(skm.toString(), CP_UTF8);
 	}
 	::ModifyMenu(_hAccelMenu, id, MF_BYCOMMAND, id, menuItem.c_str());
@@ -1043,16 +1151,30 @@ intptr_t CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPAR
 	
 	switch (Message)
 	{
-		case WM_INITDIALOG :
+		case WM_INITDIALOG:
 		{
 			NppDarkMode::autoSubclassAndThemeChildControls(_hSelf);
+
+			mapOemVirtualKeys();
 
 			::SetDlgItemText(_hSelf, IDC_NAME_EDIT, string2wstring(_name, CP_UTF8).c_str());
 			_keyCombo = _keyCombos[0];
 
 			for (size_t i = 0 ; i < nbKeys ; ++i)
 			{
-				::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(string2wstring(namedKeyArray[i].name, CP_UTF8).c_str()));
+				const char* nameStr = namedKeyArray[i].name;
+				
+				if (oemVirtualKeyMap.find(namedKeyArray[i].id) != oemVirtualKeyMap.end()) 
+				{
+					nameStr = oemVirtualKeyMap[namedKeyArray[i].id];
+				} 
+				
+				// only add a key to the IDC_KEY_COMBO list if the string is not empty
+				if (nameStr[0])
+				{
+					::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(string2wstring(nameStr, CP_UTF8).c_str()));
+					oemVkUsedIDs.push_back(namedKeyArray[i].id);
+				}
 			}
 
 			for (size_t i = 0; i < _size; ++i)
@@ -1069,26 +1191,18 @@ intptr_t CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPAR
 
 			NativeLangSpeaker* nativeLangSpeaker = NppParameters::getInstance().getNativeLangSpeaker();
 			nativeLangSpeaker->changeDlgLang(_hSelf, "ShortcutMapperSubDialg");
-			goToCenter();
+			goToCenter(SWP_SHOWWINDOW | SWP_NOSIZE);
 			return TRUE;
 		}
 
 		case WM_CTLCOLOREDIT:
 		{
-			if (NppDarkMode::isEnabled())
-			{
-				return NppDarkMode::onCtlColor(reinterpret_cast<HDC>(wParam));
-			}
-			break;
+			return NppDarkMode::onCtlColor(reinterpret_cast<HDC>(wParam));
 		}
 
 		case WM_CTLCOLORLISTBOX:
 		{
-			if (NppDarkMode::isEnabled())
-			{
-				return NppDarkMode::onCtlColorListbox(wParam, lParam);
-			}
-			break;
+			return NppDarkMode::onCtlColorListbox(wParam, lParam);
 		}
 
 		case WM_CTLCOLORDLG:
@@ -1121,9 +1235,17 @@ intptr_t CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPAR
 			return TRUE;
 		}
 
-		case WM_COMMAND : 
+		case WM_DPICHANGED:
 		{
-			switch (wParam)
+			_dpiManager.setDpiWP(wParam);
+			setPositionDpi(lParam);
+
+			return TRUE;
+		}
+
+		case WM_COMMAND:
+		{
+			switch (LOWORD(wParam))
 			{
 				case IDC_CTRL_CHECK :
 					_keyCombo._isCtrl = BST_CHECKED == ::SendDlgItemMessage(_hSelf, static_cast<int32_t>(wParam), BM_GETCHECK, 0, 0);
@@ -1151,7 +1273,7 @@ intptr_t CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPAR
 					::EndDialog(_hSelf, -1);
 					return TRUE;
 
-				case IDC_BUTTON_ADD: 
+				case IDC_BUTTON_ADD:
 				{
 					size_t oldsize = _size;
 					int res = addKeyCombo(_keyCombo);
@@ -1162,7 +1284,7 @@ intptr_t CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPAR
 							::SendDlgItemMessage(_hSelf, IDC_LIST_KEYS, LB_INSERTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(string2wstring(toString(res), CP_UTF8).c_str()));
 						}
 						else
-						{	//update current generic_string, can happen if it was disabled
+						{	//update current string, can happen if it was disabled
 							updateListItem(res);
 						}
 						::SendDlgItemMessage(_hSelf, IDC_LIST_KEYS, LB_SETCURSEL, res, 0);
@@ -1195,14 +1317,14 @@ intptr_t CALLBACK ScintillaKeyMap::run_dlgProc(UINT Message, WPARAM wParam, LPAR
 				}
 
 				default:
-					if (HIWORD(wParam) == CBN_SELCHANGE || HIWORD(wParam) == LBN_SELCHANGE)
+					if (HIWORD(wParam) == CBN_SELCHANGE) // LBN_SELCHANGE has same value 1
 					{
 						switch(LOWORD(wParam))
 						{
 							case IDC_KEY_COMBO:
 							{
-								auto i = ::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_GETCURSEL, 0, 0);
-								_keyCombo._key = namedKeyArray[i].id;
+								auto iSel = ::SendDlgItemMessage(_hSelf, IDC_KEY_COMBO, CB_GETCURSEL, 0, 0);
+								_keyCombo._key = oemVkUsedIDs[iSel];
 								::ShowWindow(::GetDlgItem(_hSelf, IDC_WARNING_STATIC), isEnabled() ? SW_HIDE : SW_SHOW);
 								validateDialog();
 								return TRUE;
@@ -1230,7 +1352,7 @@ void CommandShortcut::setCategoryFromMenu(HMENU hMenu)
 
 	if (_id >= IDM_WINDOW_WINDOWS && _id <= IDM_WINDOW_SORT_FS_DSC)
 		pNativeSpeaker->getMainMenuEntryName(_category, hMenu, "Window", L"Window");
-	else if ( _id >= IDM_VIEW_GOTO_ANOTHER_VIEW && _id <= IDM_VIEW_LOAD_IN_NEW_INSTANCE)
+	else if ( _id >= IDM_VIEW_GOTO_ANOTHER_VIEW && _id <= IDM_VIEW_GOTO_END)
 		pNativeSpeaker->getMainMenuEntryName(_category, hMenu, "view", L"View");
 	else if (_id == IDM_EDIT_LTR || _id == IDM_EDIT_RTL)
 		pNativeSpeaker->getMainMenuEntryName(_category, hMenu, "view", L"View");
@@ -1268,4 +1390,14 @@ void CommandShortcut::setCategoryFromMenu(HMENU hMenu)
 		pNativeSpeaker->getMainMenuEntryName(_category, hMenu, "tools", L"Tools");
 	else
 		pNativeSpeaker->getMainMenuEntryName(_category, hMenu, "run", L"Run");
+}
+
+CommandShortcut& CommandShortcut::operator = (const Shortcut& sct)
+{
+	if (this != &sct)
+	{
+		strcpy(this->_name, sct.getName());
+		this->_keyCombo = sct.getKeyCombo();
+	}
+	return *this;
 }
